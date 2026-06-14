@@ -1,0 +1,45 @@
+# Binaries
+ledger
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+*.out
+
+# Output
+/bin/
+
+# Go workspace
+/go.work
+
+# Dependencies
+vendor/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Credentials / Config (local)
+.ledger/
+*.credentials.json
+.env.local
+.env
+
+# Build cache
+/.cache/
+/dist/
+
+# Logs
+*.log
+logs/
