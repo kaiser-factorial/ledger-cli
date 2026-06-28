@@ -17,6 +17,8 @@ var StatusCmd = &cobra.Command{
 	Short: "Show project statuses",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		showStale, _ := cmd.Flags().GetBool("stale")
+		showArchived, _ := cmd.Flags().GetBool("archived")
+		showAll, _ := cmd.Flags().GetBool("all")
 		useJSON, _ := cmd.Flags().GetBool("json")
 		noColor, _ := cmd.Flags().GetBool("no-color")
 
@@ -29,9 +31,14 @@ var StatusCmd = &cobra.Command{
 		var projects []client.Project
 		var err2 error
 
-		if showStale {
+		switch {
+		case showStale:
 			projects, err2 = c.GetStaleProjects(context.Background())
-		} else {
+		case showArchived:
+			projects, err2 = c.GetArchivedProjects(context.Background())
+		case showAll:
+			projects, err2 = c.GetAllProjectsIncludingArchived(context.Background())
+		default:
 			projects, err2 = c.GetAllProjects(context.Background())
 		}
 		if err2 != nil {
@@ -76,6 +83,8 @@ var StatusCmd = &cobra.Command{
 
 func init() {
 	StatusCmd.Flags().Bool("stale", false, "Only show stale projects (≥10 days)")
+	StatusCmd.Flags().Bool("archived", false, "Only show archived projects")
+	StatusCmd.Flags().Bool("all", false, "Show active and archived projects")
 	StatusCmd.Flags().Bool("json", false, "Output JSON")
 	StatusCmd.Flags().Bool("no-color", false, "Disable colored status dots")
 }

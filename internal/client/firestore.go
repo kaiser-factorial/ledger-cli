@@ -16,10 +16,12 @@ type Project struct {
 	ID              string       `json:"id"`
 	Name            string       `json:"name"`
 	LastTouched     time.Time    `json:"lastTouched"`
-	LastTouchReason string      `json:"lastTouchReason"`
+	LastTouchReason string       `json:"lastTouchReason"`
 	NextAction      string       `json:"nextAction"`
 	StatusNote      string       `json:"statusNote"`
 	TouchHistory    []TouchEntry `json:"touchHistory"`
+	Archived        bool         `json:"archived"`
+	ArchivedAt      time.Time    `json:"archivedAt,omitempty"`
 }
 
 // TouchEntry represents a single touch event in history
@@ -56,8 +58,11 @@ func isNotFound(err error) bool {
 	return false
 }
 
-// GetAllProjects fetches all projects from Firestore
-func (c *Client) GetAllProjects(ctx context.Context) ([]Project, error) {
+// IsNotFound reports whether err is a Firestore "not found" error.
+func IsNotFound(err error) bool { return isNotFound(err) }
+
+// fetchProjects returns every project document (archived or not).
+func (c *Client) fetchProjects(ctx context.Context) ([]Project, error) {
 	coll := c.Collection("projects")
 	iter := coll.Documents(ctx)
 
@@ -79,6 +84,75 @@ func (c *Client) GetAllProjects(ctx context.Context) ([]Project, error) {
 		projects = append(projects, p)
 	}
 	return projects, nil
+}
+
+// GetAllProjects fetches active (non-archived) projects. Archived projects are
+// excluded from status, review, analyze, export, and stale checks by default.
+func (c *Client) GetAllProjects(ctx context.Context) ([]Project, error) {
+	all, err := c.fetchProjects(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var active []Project
+	for _, p := range all {
+		if !p.Archived {
+			active = append(active, p)
+		}
+	}
+	return active, nil
+}
+
+// GetAllProjectsIncludingArchived fetches every project (active + archived).
+func (c *Client) GetAllProjectsIncludingArchived(ctx context.Context) ([]Project, error) {
+	return c.fetchProjects(ctx)
+}
+
+// GetArchivedProjects fetches only archived projects.
+func (c *Client) GetArchivedProjects(ctx context.Context) ([]Project, error) {
+	all, err := c.fetchProjects(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var archived []Project
+	for _, p := range all {
+		if p.Archived {
+			archived = append(archived, p)
+		}
+	}
+	return archived, nil
+}
+
+// ArchiveProject soft-archives a project. Errors NotFound if it doesn't exist
+// (unlike touch/note, it never creates the doc).
+func (c *Client) ArchiveProject(ctx context.Context, id string) error {
+	now := time.Now()
+	_, err := c.Collection("projects").Doc(id).Update(ctx, []firestore.Update{
+		{Path: "archived", Value: true},
+		{Path: "archivedAt", Value: now},
+		{Path: "updatedAt", Value: now},
+	})
+	return err
+}
+
+// RestoreProject clears the archived flag, returning a project to the active list.
+func (c *Client) RestoreProject(ctx context.Context, id string) error {
+	_, err := c.Collection("projects").Doc(id).Update(ctx, []firestore.Update{
+		{Path: "archived", Value: firestore.Delete},
+		{Path: "archivedAt", Value: firestore.Delete},
+		{Path: "updatedAt", Value: time.Now()},
+	})
+	return err
+}
+
+// DeleteProject permanently deletes a project. Returns NotFound if it doesn't
+// exist (Firestore Delete is otherwise idempotent).
+func (c *Client) DeleteProject(ctx context.Context, id string) error {
+	doc := c.Collection("projects").Doc(id)
+	if _, err := doc.Get(ctx); err != nil {
+		return err
+	}
+	_, err := doc.Delete(ctx)
+	return err
 }
 
 // GetStaleProjects fetches projects that haven't been touched in 10+ days

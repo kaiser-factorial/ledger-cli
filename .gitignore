@@ -26,6 +26,15 @@ vendor/
 *.swo
 *~
 
+# Editor / scratch backup copies
+*.bak
+*.orig
+*.backup
+*.backup[0-9]
+*.work
+*.hardcoded
+*.pre_*
+
 # OS artifacts
 .DS_Store
 Thumbs.db

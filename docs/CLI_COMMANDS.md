@@ -2,6 +2,13 @@
 
 ## Core Commands
 
+> **Note on `<slug>`:** The `<slug>` argument is the Firestore **document id** of the
+> project (the `id` field in `ledger status --json`), not the human-readable project
+> name. Commands that write by slug (`touch`, `note`) use upsert semantics: if no
+> document with that id exists, a **new** project document is created rather than
+> erroring — so a mistyped slug, or a project name passed where a document id is
+> expected, will silently create a new project instead of updating the intended one.
+
 ### `ledger init`
 Initialize configuration file and set up local credentials directory.
 
@@ -22,20 +29,32 @@ Display project status overview.
 - `--stale` - Only show stale projects (RED status)
 - `--json` - Output JSON format
 
-### `ledger note <slug>`
-Add or edit notes for a project. Opens editor for multiline input.
+### `ledger note <slug> <note>`
+Add a note to a project. The note text is passed **inline as a positional argument** —
+this command is not interactive and does not open an editor. The note is recorded as a
+touch with the reason `note: <note>`.
+
+**Flags:**
+- `--json` - Output JSON format (`{ "slug", "note", "added_at" }`)
 
 ### `ledger review`
-Interactive review mode for touching multiple projects.
+Show weekly review buckets.
 
 **Flags:**
-- `--wizard` - Enable wizard mode
+- `--wizard` - Run interactive wizard for review
+- `--json` - Output JSON format
+- `--no-color` - Disable colored status dots
 
-### `ledger analyze [--reasons]`
-Analyze project metrics and touch patterns.
+### `ledger analyze`
+Analyze your touch history.
 
 **Flags:**
-- `--reasons` - Include reason breakdown analysis
+- `--spark` - Show ASCII sparkline of touch distribution
+- `--json` - Output JSON format
+
+The reason breakdown is always included in the `--json` output (under the `reasons`
+key); there is no flag to toggle it. There is no `--reasons` flag — passing it errors
+with `unknown flag: --reasons` and exits with code 50.
 
 ### `ledger doctor`
 Check system connectivity and configuration health.
@@ -68,7 +87,9 @@ Set configuration value.
 Export project data.
 
 **Flags:**
-- `--format` - Output format (json or csv)
+- `--format` - Output format: json or csv (default "json")
+- `-o, --output` - Write to a file instead of stdout
+- `--stale` - Only export stale projects (≥10 days)
 
 ## Exit Codes
 
