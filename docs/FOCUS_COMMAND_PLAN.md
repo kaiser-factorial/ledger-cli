@@ -1,8 +1,8 @@
 # `ledger focus` — current-focus primitive (implementation plan)
 
 *Grounded plan produced by a code-exploring agent against the real Go CLI (2026-06-26). No code
-written. Adds an explicit current-focus concept so BRICK reads a deliberate focus instead of the
-`--last` heuristic. Referenced in `../../ledger/docs/BRICK_MODE_PLAN.md` decision #11.*
+written. Adds an explicit current-focus concept so bulwork reads a deliberate focus instead of the
+`--last` heuristic. Referenced in `../../ledger/docs/BULWORK_MODE_PLAN.md` decision #11.*
 
 ## 1. CLI structure (verified)
 
@@ -35,18 +35,18 @@ Option B (an `isFocused` field on projects).
 Rationale: the "at most one focus" invariant is structurally free with one doc; Option B needs a
 read-all-then-clear transaction on every set and leaks focus state into every project doc + the app's
 `Project` type / `normalizeProject`. Focus is a property of the user's session, not a project; `setAt`
-gives BRICK a staleness signal; clearing is one `Delete`. Fits the current single-user model.
+gives bulwork a staleness signal; clearing is one `Delete`. Fits the current single-user model.
 
 **Forward-compat:** keep the path in ONE helper `focusDocRef()` so a future `users/<uid>/state/focus`
 move (when multi-user scoping lands — decision #11 / Phase-4 consolidation) is a one-line edit.
 **Edge case:** focus pointing at an archived/deleted project — `focus` (show) should look the project
-up and report `exists`/`archived` so BRICK can fall back.
+up and report `exists`/`archived` so bulwork can fall back.
 
 ## 4. Command surface + JSON shapes
 
 - `ledger focus <id>` (set) — validate the project exists first (new `GetProject`); not-found →
   `exit.NotFound`. Returns `{projectId, name, nextAction, setAt, focused:true}`.
-- `ledger focus` (show) — no focus → exit **0**, `{focused:false}` (so BRICK distinguishes "no focus"
+- `ledger focus` (show) — no focus → exit **0**, `{focused:false}` (so bulwork distinguishes "no focus"
   from an error); focus set → `{focused:true, projectId, name, nextAction, setAt, exists, archived}`.
 - `ledger focus --clear` — delete the pointer (idempotent), `{focused:false, cleared:true}`.
 - Cobra: `Args: cobra.MaximumNArgs(1)`; reject `<id>` + `--clear` with `exit.Validation`.
@@ -65,7 +65,7 @@ up and report `exists`/`archived` so BRICK can fall back.
 - **Edit `docs/CLI_COMMANDS.md`** — document the command + the three JSON shapes (exit 0 when no
   focus). No changes to `internal/{exit,auth,config}`; no new deps.
 
-## How BRICK consumes it (replaces `--last`)
+## How bulwork consumes it (replaces `--last`)
 
 At session start: run `ledger focus --json`. `focused:false` → prompt the user to pick / `--task`
 (no silent default — preserves decision #11's "selecting focus is deliberate"). `focused:true` → use
@@ -73,7 +73,7 @@ At session start: run `ledger focus --json`. `focused:false` → prompt the user
 treat as stale and re-prompt. Collapses session-start to one command, and gives the Phase-5 exit a
 clean `ledger touch` + `ledger focus --clear` pairing.
 
-> Note: BRICK's `--last` lives in `../../brick/src/ledger.ts`; this command becomes the preferred
+> Note: bulwork's `--last` lives in `../../bulwork/src/ledger.ts`; this command becomes the preferred
 > focus source there once it ships.
 
 ## Critical files
