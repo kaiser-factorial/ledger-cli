@@ -91,6 +91,45 @@ Export project data.
 - `-o, --output` - Write to a file instead of stdout
 - `--stale` - Only export stale projects (≥10 days)
 
+## Bulwork Workload Store (Epic D)
+
+Backs bulwork's `LedgerPlanStore`/`LedgerTemplateStore` (`../../bulwork/src/plan-store.ts`,
+`template-store.ts`). These commands are a thin, **schema-agnostic JSON mirror** — ledger-cli does
+not know or validate the `WorkloadPlan`/`WorkflowTemplate` shape (that lives in bulwork's
+`src/types.ts`); `set` only checks that stdin is syntactically valid JSON, and `show`/`list` print
+back whatever was stored, verbatim.
+
+### `ledger plan show [--json]`
+Show the current workload plan. There is at most **one** active plan (a singleton, mirroring
+bulwork's local `.data/plan.json`) — no history yet.
+
+**No active plan is a valid state, not an error:** exits **0** either way, printing JSON `null`
+(with `--json`) or "No active plan" (human). This mirrors the `ledger focus` convention documented
+in `FOCUS_COMMAND_PLAN.md`.
+
+### `ledger plan set [--json]`
+Overwrite the current plan. Reads the **full plan JSON from stdin** (not an argument):
+```
+echo '{"id":"plan_x","blocks":[],"createdAt":"..."}' | ledger plan set --json
+```
+Always a full replace, never a partial merge.
+
+### `ledger plan clear [--json]`
+Delete the current plan. Idempotent — clearing an already-empty plan is not an error.
+
+### `ledger template list [--json]`
+List every saved workflow template. `--json` always prints an array (`[]` when empty, never `null`).
+
+### `ledger template show <id> [--json]`
+Show one template. Unlike `plan show`, a missing id **is** a `NotFound` error (exit `20`) — you
+named a specific id and it doesn't exist, unlike the plan singleton's "nothing set yet."
+
+### `ledger template set <id> [--json]`
+Upsert one template by id. Reads the full template JSON from stdin, same convention as `plan set`.
+
+### `ledger template delete <id> [--json]`
+Delete one template by id. `NotFound` (exit `20`) if it never existed.
+
 ## Exit Codes
 
 - `0` - Success

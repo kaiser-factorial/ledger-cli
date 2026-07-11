@@ -172,6 +172,104 @@ func (c *Client) GetStaleProjects(ctx context.Context) ([]Project, error) {
 	return stale, nil
 }
 
+// ---------- Workload plan (Epic D) ----------
+//
+// bulwork (TypeScript) owns the WorkloadPlan/WorkflowTemplate schema (src/types.ts) and changes it
+// often; this client deliberately treats plan/template payloads as opaque JSON rather than
+// duplicating that schema in Go structs. All values already round-trip as JSON primitives/strings
+// (dates are ISO strings, never Firestore Timestamp), so map[string]interface{} is lossless.
+
+// planDocRef is the single source of the workload-plan path — bulwork's PlanStore is a singleton
+// (one active plan at a time, no history yet). Kept as one helper so a future change (e.g. a
+// history collection, or per-user scoping) is a one-line edit.
+func (c *Client) planDocRef() *firestore.DocumentRef {
+	return c.Collection("plans").Doc("current")
+}
+
+// GetPlan returns the current workload plan. ok=false (no error) means "no active plan" — a valid
+// empty state, not a failure.
+func (c *Client) GetPlan(ctx context.Context) (map[string]interface{}, bool, error) {
+	snap, err := c.planDocRef().Get(ctx)
+	if err != nil {
+		if isNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return snap.Data(), true, nil
+}
+
+// SetPlan overwrites the current plan wholesale (matches bulwork's LocalPlanStore.save(), which
+// always rewrites the entire file — never a partial merge).
+func (c *Client) SetPlan(ctx context.Context, data map[string]interface{}) error {
+	_, err := c.planDocRef().Set(ctx, data)
+	return err
+}
+
+// ClearPlan deletes the current plan. Idempotent — deleting an absent doc is not an error.
+func (c *Client) ClearPlan(ctx context.Context) error {
+	_, err := c.planDocRef().Delete(ctx)
+	return err
+}
+
+// ---------- Workflow templates (Epic D) ----------
+
+func (c *Client) templatesColl() *firestore.CollectionRef {
+	return c.Collection("templates")
+}
+
+// ListTemplates returns every saved workflow template (never nil — an empty result marshals to
+// `[]`, not `null`, matching what bulwork's TemplateStore.list() expects).
+func (c *Client) ListTemplates(ctx context.Context) ([]map[string]interface{}, error) {
+	iter := c.templatesColl().Documents(ctx)
+	out := []map[string]interface{}{}
+	for {
+		doc, err := iter.Next()
+		if err != nil {
+			if err == iterator.Done {
+				break
+			}
+			return nil, err
+		}
+		out = append(out, doc.Data())
+	}
+	return out, nil
+}
+
+// GetTemplate returns one template by id. ok=false (no error) means it doesn't exist.
+func (c *Client) GetTemplate(ctx context.Context, id string) (map[string]interface{}, bool, error) {
+	snap, err := c.templatesColl().Doc(id).Get(ctx)
+	if err != nil {
+		if isNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return snap.Data(), true, nil
+}
+
+// SetTemplate upserts a template wholesale by id.
+func (c *Client) SetTemplate(ctx context.Context, id string, data map[string]interface{}) error {
+	_, err := c.templatesColl().Doc(id).Set(ctx, data)
+	return err
+}
+
+// DeleteTemplate deletes a template by id. existed reports whether it was there beforehand, so
+// callers can distinguish "deleted" from "wasn't there" (mirrors DeleteProject's Get-then-Delete).
+func (c *Client) DeleteTemplate(ctx context.Context, id string) (bool, error) {
+	doc := c.templatesColl().Doc(id)
+	if _, err := doc.Get(ctx); err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if _, err := doc.Delete(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // TouchProject records a touch for a project, appending to touchHistory (capped at 8)
 func (c *Client) TouchProject(ctx context.Context, slug, reason string) error {
 	doc := c.Collection("projects").Doc(slug)
